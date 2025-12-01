@@ -1,5 +1,3 @@
-# AEGIS
-A tool to reduce latency and improve agents workflows
 # A.E.G.I.S.
 **Autonomous Engine for Graph-based Interoperability & Synchronization**
 
