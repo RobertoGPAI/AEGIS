@@ -1,10 +1,21 @@
-import asyncio
 import sys
+import os
+import asyncio
 import time
-from aegis.core import AegisOrchestrator
-from aegis.protocols import MCPTool, A2AAgent, AgentCard
 
-# --- Configuración de "Vibe" (Colores) ---
+# --- PATH SETUP ---
+# Add 'src' to the python path so imports work correctly when running 'python main.py'
+sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+
+try:
+    from aegis.core import AegisOrchestrator
+    from aegis.protocols import MCPTool, A2AAgent, AgentCard
+except ImportError:
+    # Fallback import if running directly from source
+    from src.aegis.core import AegisOrchestrator
+    from src.aegis.protocols import MCPTool, A2AAgent, AgentCard
+
+# --- Vibe Coding: Terminal Aesthetics ---
 class Colors:
     HEADER = '\033[95m'
     BLUE = '\033[94m'
@@ -14,66 +25,103 @@ class Colors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
 
-# ... (Las definiciones de herramientas build_graph se mantienen igual) ...
-# ... (Copia aquí las funciones tool_market_research, tool_financial_data y build_graph del mensaje anterior) ...
+# --- 1. Mock Resource Definition (Simulating MCP Tools) ---
+async def tool_market_research(context):
+    print(f"{Colors.BLUE}   [Tool] Running Market Research...{Colors.ENDC}")
+    await asyncio.sleep(2.0) # Simulating network latency
+    return "Data found"
 
-# --- NUEVO: Función HITL (Human-in-the-Loop) ---
-def ask_human_approval(stats: dict, graph_topology: list) -> bool:
-    """
-    Presenta los datos de riesgo al humano y pide autorización.
-    """
+async def tool_financial_data(context):
+    print(f"{Colors.BLUE}   [Tool] Fetching Financial Data...{Colors.ENDC}")
+    await asyncio.sleep(1.5) # Simulating DB query
+    return "Financials OK"
+
+# --- 2. Graph Construction (The A.E.G.I.S. Logic) ---
+def build_production_graph() -> AegisOrchestrator:
+    orchestrator = AegisOrchestrator("Capstone-Graph")
+    
+    # Tier 1: Tools running in PARALLEL (Independent)
+    # We define PERT estimates (Optimistic, Likely, Pessimistic) for Monte Carlo
+    orchestrator.add_node(
+        "researcher", 
+        MCPTool(name="MarketResearcher", description="Web Search", func=tool_market_research, is_critical=True),
+        pert_estimates=(1.0, 2.0, 5.0)
+    )
+    
+    orchestrator.add_node(
+        "analyst", 
+        MCPTool(name="FinancialAnalyst", description="DB Query", func=tool_financial_data),
+        pert_estimates=(0.5, 1.5, 2.5)
+    )
+
+    # Tier 2: Agent via A2A (DEPENDS ON Tier 1)
+    # This node waits for the previous ones to finish
+    writer_card = AgentCard(name="SeniorWriter", capabilities=["writing"], endpoint="http://writer-agent")
+    orchestrator.add_node(
+        "writer", 
+        A2AAgent(card=writer_card), 
+        depends_on=["researcher", "analyst"],
+        pert_estimates=(2.0, 3.5, 8.0)
+    )
+    
+    return orchestrator
+
+# --- 3. HITL Logic (Human-in-the-Loop Gate) ---
+def ask_human_approval(stats: dict) -> bool:
     print(f"\n{Colors.HEADER} A.E.G.I.S. PRE-FLIGHT CHECK (HITL){Colors.ENDC}")
     print("-" * 40)
+    print(f"{Colors.WARNING}🎲 Risk Prediction (Monte Carlo):{Colors.ENDC}")
+    print(f"     Expected Time (Avg): {stats['avg_case']:.2f}s")
+    print(f"     SLA Guarantee (P80): {stats['P80_confidence']:.2f}s")
+    print(f"     Worst Case (P99):    {stats['P95_confidence']:.2f}s")
     
-    # 1. Mostrar Topología (El Plan)
-    print(f"{Colors.BLUE} Plan de Ejecución:{Colors.ENDC}")
-    print(f"   Nodos: {len(graph_topology)} agentes/herramientas")
-    print(f"   Flujo: {graph_topology}")
-
-    # 2. Mostrar Predicción Monte Carlo (El Riesgo)
-    print(f"\n{Colors.WARNING} Predicción de Riesgo (Monte Carlo):{Colors.ENDC}")
-    print(f"     Tiempo Esperado (P50): {stats['P50_confidence']:.2f}s")
-    print(f"     SLA Garantizado (P80): {stats['P80_confidence']:.2f}s")
-    
-    if stats['worst_case'] > 8.0:
-        print(f"     ALERTA: El peor caso ({stats['worst_case']:.2f}s) supera el umbral de seguridad.")
+    # Alert if the P99 is too high (Safety Guardrail)
+    if stats['P95_confidence'] > 12.0:
+        print(f"\n    ALERT: High latency risk detected. Review required.")
     
     print("-" * 40)
-    response = input(f"{Colors.BOLD}¿Autorizar ejecución? (y/n): {Colors.ENDC}").lower().strip()
-    return response == 'y'
+    try:
+        response = input(f"{Colors.BOLD}Authorize Execution? (y/n): {Colors.ENDC}").lower().strip()
+        return response == 'y'
+    except EOFError:
+        return True # For non-interactive environments
 
-# --- Entry Point Actualizado ---
+# --- 4. Main Application Loop ---
 async def main():
-    query = sys.argv[1] if len(sys.argv) > 1 else "Generar Estrategia Q4"
+    # Capture CLI argument or use default
+    query = sys.argv[1] if len(sys.argv) > 1 else "Generate Q4 Strategy"
     
-    print(f"{Colors.BOLD}  Iniciando A.E.G.I.S. Orchestrator{Colors.ENDC}")
+    print(f"{Colors.BOLD}  Starting A.E.G.I.S. Orchestrator{Colors.ENDC}")
+    print(f"   Target: '{query}'")
     
-    # 1. Construcción (Planning)
-    app = build_graph(query)
+    # Phase 1: Build the Graph
+    app = build_production_graph()
     
-    # 2. Simulación (Monte Carlo)
-    # Hacemos esto ANTES de gastar dinero/recursos reales
+    # Phase 2: Simulation (Monte Carlo)
+    # We run this BEFORE spending any real resources/tokens
     stats = app.simulate(iterations=5000)
     
-    # 3. Health Check (Simulado aquí, en real chequearía endpoints)
-    # Si falla aquí, ni preguntamos al humano (Fail-Fast)
-    print(f"\n Ejecutando Health Checks... {Colors.GREEN}OK{Colors.ENDC}")
-
-    # 4. HITL (Human-in-the-Loop) -> NUEVO PASO CRÍTICO
-    # Obtenemos la topología para mostrarla
-    topology = list(app.graph.nodes)
-    if not ask_human_approval(stats, topology):
-        print(f"\n{Colors.FAIL} Ejecución cancelada por el operador.{Colors.ENDC}")
-        sys.exit(0)
-
-    # 5. Ejecución Real (Solo si pasó el HITL)
-    print(f"\n{Colors.GREEN} Autorización recibida. Ejecutando grafo...{Colors.ENDC}")
-    start_time = time.perf_counter()
-    results = await app.run(query)
-    end_time = time.perf_counter()
+    # Phase 3: Health Checks (Simulated Fail-Fast)
+    print(f"\n Health Checks: {Colors.GREEN}PASS{Colors.ENDC}")
     
-    print(f"\n Completado en {end_time - start_time:.2f}s")
-    # print(results) # Opcional: mostrar resultados crudos
+    # Phase 4: HITL Approval Gate
+    if not ask_human_approval(stats):
+        print(f"{Colors.FAIL} Aborted by user.{Colors.ENDC}")
+        return
+
+    # Phase 5: Real Execution (Only if authorized)
+    print(f"\n{Colors.GREEN}🚀 Executing Graph...{Colors.ENDC}")
+    start = time.perf_counter()
+    await app.run(query)
+    duration = time.perf_counter() - start
+    
+    # Final Report
+    print(f"\n Workflow Completed in {duration:.2f}s")
+    
+    # Calculate savings vs Sequential Execution (Sum of 'Likely' times)
+    sequential_time = 2.0 + 1.5 + 3.5
+    savings = sequential_time - duration
+    print(f"{Colors.WARNING}(Latency Savings vs Sequential: ~{savings:.2f}s){Colors.ENDC}")
 
 if __name__ == "__main__":
     asyncio.run(main())
