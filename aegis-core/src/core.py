@@ -113,7 +113,7 @@ class AegisOrchestrator:
         results = {}
         
         for generation in nx.topological_generations(self.graph):
-            print(f"\n⚡ [CPM] Executing parallel generation: {generation}")
+            print(f"\n [CPM] Executing parallel generation: {generation}")
             
             coroutines = [self._run_node(node, context) for node in generation]
             gen_results = await asyncio.gather(*coroutines)
